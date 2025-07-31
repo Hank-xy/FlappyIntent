@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Flappy Rocket Eagle - Level Mode</title>
+  <style>
+    body {
+      margin: 0;
+      background: black;
+    }
+    canvas {
+      display: block;
+      margin: 20px auto;
+      background: black;
+    }
+    #score {
+      text-align: center;
+      font-size: 30px;
+      font-weight: bold;
+      color: #00ffcc;
+      font-family: 'Courier New', monospace;
+      text-shadow: 0 0 8px #00ffcc;
+    }
+    #gameOver {
+      position: absolute;
+      top: 30%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.85);
+      border: 2px solid #00ffcc;
+      border-radius: 16px;
+      padding: 40px;
+      color: #00ffcc;
+      font-family: 'Courier New', monospace;
+      font-size: 26px;
+      text-align: center;
+      text-shadow: 0 0 6px #00ffcc;
+      display: none;
+      z-index: 999;
+    }
+    #gameOver span {
+      font-size: 48px;
+      color: gold;
+      text-shadow: 0 0 10px gold;
+    }
+    #levelUp {
+      position: absolute;
+      top: 20%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 36px;
+      color: gold;
+      text-shadow: 0 0 12px gold;
+      font-family: 'Courier New', monospace;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="score">Score: 0 | High Score: 0</div>
+  <div id="levelUp">🚀 Level Up! 🚨</div>
+  <div id="gameOver">Game Over<br>Your Score: <span id="finalScore">0</span><br><br>Press any key to try again</div>
+  <canvas id="gameCanvas" width="400" height="600"></canvas>
+  <audio id="flapSound" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_6b05ecb484.mp3?filename=cartoon-jump-6462.mp3"></audio>
+
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const scoreDisplay = document.getElementById("score");
+    const flapSound = document.getElementById("flapSound");
+    const gameOverScreen = document.getElementById("gameOver");
+    const finalScore = document.getElementById("finalScore");
+    const levelUpText = document.getElementById("levelUp");
+
+    let eagleY = canvas.height / 2;
+    let velocity = 0;
+    let score = 0;
+    let highScore = localStorage.getItem("highScore") || 0;
+    let isGameOver = false;
+    let pipeSpeed = 2;
+    let gravity = 0.18;
+    let pipeGap = 280;
+    let level = 1;
+
+    const eagleImg = new Image();
+    eagleImg.src = "eagle.png";
+
+    const watermark = new Image();
+    let watermarkLoaded = false;
+    watermark.onload = () => {
+      watermarkLoaded = true;
+    };
+    watermark.src = "watermark.png";
+
+    const pipes = [];
+    const pipeWidth = 60;
+
+    function createPipe() {
+      const topHeight = Math.random() * (canvas.height - pipeGap - 100) + 30;
+      pipes.push({ x: canvas.width, top: topHeight, bottom: topHeight + pipeGap, passed: false });
+    }
+
+    function drawEagle() {
+      ctx.drawImage(eagleImg, 60, eagleY, 60, 60);
+    }
+
+    function drawPipes() {
+      pipes.forEach(pipe => {
+        ctx.fillStyle = "#ff4d4d";
+        ctx.fillRect(pipe.x + 20, pipe.top - 40, 20, 40);
+        ctx.fillRect(pipe.x + 29, 0, 2, pipe.top);
+        ctx.fillStyle = "#00ff66";
+        ctx.fillRect(pipe.x + 20, pipe.bottom, 20, 40);
+        ctx.fillRect(pipe.x + 29, pipe.bottom + 40, 2, canvas.height - pipe.bottom - 40);
+      });
+    }
+
+    function drawWatermarkImage() {
+      if (!watermarkLoaded) return;
+      if (!watermark.complete) return;
+      const scale = 0.25;
+      const width = watermark.width * scale;
+      const height = watermark.height * scale;
+      ctx.save();
+      ctx.globalAlpha = 0.2;
+      ctx.globalCompositeOperation = "destination-over";
+      ctx.drawImage(watermark, (canvas.width - width) / 2, (canvas.height - height) / 2, width, height);
+      ctx.restore();
+    }
+
+    function showLevelUp() {
+      levelUpText.style.display = "block";
+      setTimeout(() => levelUpText.style.display = "none", 1500);
+    }
+
+    function updateLevel() {
+      const newLevel = Math.floor(score / 5) + 1;
+      if (newLevel > level) {
+        level = newLevel;
+        pipeSpeed = 2 + (level - 1) * 0.8;
+        gravity = 0.18 + (level - 1) * 0.02;
+        pipeGap = Math.max(120, 280 - (level - 1) * 20);
+        showLevelUp();
+      }
+    }
+
+    function update() {
+      if (isGameOver) return;
+      velocity += gravity;
+      eagleY += velocity;
+
+      if (pipes.length === 0 || pipes[pipes.length - 1].x < canvas.width - 200) createPipe();
+
+      pipes.forEach(pipe => {
+        pipe.x -= pipeSpeed;
+
+        if (!pipe.passed && pipe.x + pipeWidth < 60) {
+          pipe.passed = true;
+          score++;
+          scoreDisplay.textContent = "Score: " + score + " | High Score: " + highScore;
+          updateLevel();
+        }
+
+        if (60 + 60 > pipe.x && 60 < pipe.x + pipeWidth) {
+          if (eagleY < pipe.top || eagleY + 60 > pipe.bottom) triggerGameOver();
+        }
+      });
+
+      if (eagleY + 60 > canvas.height || eagleY < 0) triggerGameOver();
+    }
+
+    function triggerGameOver() {
+      isGameOver = true;
+      finalScore.textContent = score;
+      if (score > highScore) {
+        highScore = score;
+        localStorage.setItem("highScore", highScore);
+      }
+      gameOverScreen.style.display = "block";
+    }
+
+    function resetGame() {
+      eagleY = canvas.height / 2;
+      velocity = 0;
+      pipes.length = 0;
+      score = 0;
+      isGameOver = false;
+      pipeSpeed = 2;
+      gravity = 0.18;
+      pipeGap = 280;
+      level = 1;
+      scoreDisplay.textContent = "Score: 0 | High Score: " + highScore;
+      gameOverScreen.style.display = "none";
+      levelUpText.style.display = "none";
+    }
+
+    function gameLoop() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      update();
+      drawPipes();
+      drawWatermarkImage();
+      drawEagle();
+      drawWatermarkImage();
+      requestAnimationFrame(gameLoop);
+    }
+
+    document.addEventListener("keydown", () => {
+      if (isGameOver) {
+        resetGame();
+      } else {
+        velocity = -4;
+        flapSound.currentTime = 0;
+        flapSound.play();
+      }
+    });
+
+    eagleImg.onload = () => {
+      resetGame();
+      gameLoop();
+    };
+  </script>
+</body>
+</html>
